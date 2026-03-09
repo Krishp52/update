@@ -1,0 +1,1555 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FinTrack — Personal Finance</title>
+<script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* ═══════════════════════════════════════════
+   TOKENS
+═══════════════════════════════════════════ */
+:root {
+  --bg:          #0a0c10;
+  --bg2:         #0f1117;
+  --panel:       #13161e;
+  --panel2:      #181c26;
+  --panel3:      #1e2230;
+  --border:      rgba(255,255,255,0.07);
+  --border-hi:   rgba(255,255,255,0.14);
+  --blue:        #4f8ef7;
+  --blue-dim:    rgba(79,142,247,0.12);
+  --blue-glow:   rgba(79,142,247,0.25);
+  --green:       #34d399;
+  --green-dim:   rgba(52,211,153,0.1);
+  --red:         #f87171;
+  --red-dim:     rgba(248,113,113,0.1);
+  --amber:       #fbbf24;
+  --amber-dim:   rgba(251,191,36,0.1);
+  --violet:      #a78bfa;
+  --violet-dim:  rgba(167,139,250,0.1);
+  --text:        #f0f2f8;
+  --text2:       #8892aa;
+  --text3:       #404760;
+  --mono:        'DM Mono', monospace;
+  --sans:        'Plus Jakarta Sans', sans-serif;
+  --r:           12px;
+  --r-sm:        8px;
+  --r-lg:        16px;
+  --sidebar-w:   64px;
+  --topbar-h:    58px;
+  --trans:       0.18s cubic-bezier(0.4,0,0.2,1);
+}
+
+/* ═══════════════════════════════════════════
+   RESET & BASE
+═══════════════════════════════════════════ */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html { scroll-behavior: smooth; }
+
+body {
+  font-family: var(--sans);
+  background: var(--bg);
+  color: var(--text);
+  font-size: 13.5px;
+  line-height: 1.55;
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* mesh background */
+body::before {
+  content: '';
+  position: fixed; inset: 0; z-index: 0;
+  background:
+    radial-gradient(ellipse 900px 600px at 15% 0%,   rgba(79,142,247,0.055) 0%, transparent 70%),
+    radial-gradient(ellipse 700px 500px at 85% 100%,  rgba(167,139,250,0.04) 0%, transparent 70%);
+  pointer-events: none;
+}
+
+/* ═══════════════════════════════════════════
+   LAYOUT
+═══════════════════════════════════════════ */
+.app-shell {
+  display: flex;
+  min-height: 100vh;
+  position: relative;
+  z-index: 1;
+}
+
+/* ── SIDEBAR ── */
+.sidebar {
+  width: var(--sidebar-w);
+  background: var(--panel);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 16px 0;
+  position: fixed;
+  top: 0; left: 0; bottom: 0;
+  z-index: 100;
+  gap: 4px;
+}
+
+.sidebar-logo {
+  width: 36px; height: 36px;
+  background: linear-gradient(135deg, var(--blue), var(--violet));
+  border-radius: 10px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 16px; font-weight: 800; color: #fff;
+  margin-bottom: 24px;
+  flex-shrink: 0;
+  letter-spacing: -0.04em;
+}
+
+.nav-item {
+  width: 40px; height: 40px;
+  border-radius: var(--r-sm);
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer;
+  color: var(--text3);
+  transition: background var(--trans), color var(--trans);
+  font-size: 17px;
+  position: relative;
+  border: none; background: transparent;
+}
+
+.nav-item:hover, .nav-item.active {
+  background: var(--panel3);
+  color: var(--text);
+}
+
+.nav-item.active::before {
+  content: '';
+  position: absolute;
+  left: -16px; top: 50%;
+  transform: translateY(-50%);
+  width: 3px; height: 20px;
+  background: var(--blue);
+  border-radius: 0 3px 3px 0;
+}
+
+.nav-tooltip {
+  position: absolute;
+  left: calc(100% + 12px);
+  top: 50%; transform: translateY(-50%);
+  background: var(--panel3);
+  border: 1px solid var(--border-hi);
+  color: var(--text);
+  padding: 5px 10px;
+  border-radius: var(--r-sm);
+  font-size: 11.5px;
+  font-weight: 600;
+  white-space: nowrap;
+  opacity: 0; pointer-events: none;
+  transition: opacity var(--trans);
+  z-index: 200;
+}
+
+.nav-item:hover .nav-tooltip { opacity: 1; }
+
+.sidebar-spacer { flex: 1; }
+
+/* ── MAIN AREA ── */
+.main-area {
+  margin-left: var(--sidebar-w);
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+/* ── TOPBAR ── */
+.topbar {
+  height: var(--topbar-h);
+  background: rgba(15,17,23,0.88);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  padding: 0 28px;
+  gap: 16px;
+  position: sticky; top: 0; z-index: 50;
+}
+
+.topbar-title {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--text);
+  letter-spacing: -0.02em;
+  flex: 1;
+}
+
+.topbar-title small {
+  color: var(--text2);
+  font-weight: 400;
+  font-size: 0.78rem;
+  margin-left: 6px;
+}
+
+.topbar-actions { display: flex; gap: 8px; align-items: center; }
+
+.live-dot {
+  display: flex; align-items: center; gap: 6px;
+  padding: 5px 12px;
+  background: var(--green-dim);
+  border: 1px solid rgba(52,211,153,0.2);
+  border-radius: 20px;
+  font-size: 11.5px; font-weight: 600; color: var(--green);
+}
+
+.live-dot::before {
+  content: '';
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: var(--green);
+  box-shadow: 0 0 6px var(--green);
+  animation: blink 2s ease-in-out infinite;
+}
+
+@keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.35} }
+
+/* ── CONTENT ── */
+.content {
+  padding: 24px 28px 60px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+/* ═══════════════════════════════════════════
+   MARKET STRIP
+═══════════════════════════════════════════ */
+.market-strip {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+}
+
+.mkt-card {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  padding: 18px 20px;
+  display: flex; align-items: center; gap: 14px;
+  transition: border-color var(--trans), transform var(--trans);
+  position: relative; overflow: hidden;
+}
+
+.mkt-card:hover { border-color: var(--border-hi); transform: translateY(-2px); }
+
+.mkt-icon {
+  width: 40px; height: 40px; border-radius: 10px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 18px; flex-shrink: 0;
+}
+
+.mkt-icon.nifty  { background: var(--blue-dim); }
+.mkt-icon.gold   { background: var(--amber-dim); }
+.mkt-icon.silver { background: rgba(148,163,184,0.1); }
+
+.mkt-info { flex: 1; min-width: 0; }
+
+.mkt-name { font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text2); margin-bottom: 3px; }
+.mkt-price { font-family: var(--mono); font-size: 1.15rem; font-weight: 500; color: var(--text); letter-spacing: -0.02em; }
+.mkt-change { display: inline-flex; align-items: center; gap: 3px; font-family: var(--mono); font-size: 11px; font-weight: 500; padding: 2px 8px; border-radius: 20px; margin-top: 4px; }
+.mkt-change.up   { background: var(--green-dim); color: var(--green); }
+.mkt-change.down { background: var(--red-dim);   color: var(--red); }
+.mkt-change.neutral { background: var(--panel2); color: var(--text2); }
+
+.mkt-updated { font-size: 10px; color: var(--text3); font-family: var(--mono); margin-top: 4px; }
+
+/* ═══════════════════════════════════════════
+   TICKER
+═══════════════════════════════════════════ */
+.ticker-wrap {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  padding: 9px 0;
+  overflow: hidden;
+  position: relative;
+}
+
+.ticker-wrap::before, .ticker-wrap::after {
+  content: ''; position: absolute; top: 0; bottom: 0; width: 80px; z-index: 2;
+}
+
+.ticker-wrap::before { left: 0; background: linear-gradient(90deg, var(--panel), transparent); }
+.ticker-wrap::after  { right: 0; background: linear-gradient(-90deg, var(--panel), transparent); }
+
+.ticker-inner { display: inline-flex; animation: scroll-ticker 50s linear infinite; }
+.ticker-item { white-space: nowrap; color: var(--text2); font-size: 12px; font-family: var(--mono); padding: 0 40px; }
+.ticker-item span { color: var(--text3); margin-right: 6px; }
+
+@keyframes scroll-ticker { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+
+/* ═══════════════════════════════════════════
+   KPI GRID
+═══════════════════════════════════════════ */
+.kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr) repeat(3, 1fr) repeat(3, 1fr);
+  gap: 10px;
+}
+
+@media (max-width: 1100px) { .kpi-grid { grid-template-columns: repeat(3, 1fr); } }
+@media (max-width: 640px)  { .kpi-grid { grid-template-columns: 1fr 1fr; } }
+
+.kpi {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  padding: 16px 18px;
+  transition: border-color var(--trans);
+}
+
+.kpi:hover { border-color: var(--border-hi); }
+
+.kpi-label { font-size: 10.5px; font-weight: 700; letter-spacing: 0.07em; text-transform: uppercase; color: var(--text2); margin-bottom: 8px; }
+
+.kpi-val {
+  font-family: var(--mono);
+  font-size: 1.2rem;
+  font-weight: 500;
+  color: var(--text);
+  letter-spacing: -0.025em;
+}
+
+.kpi-val.green  { color: var(--green); }
+.kpi-val.blue   { color: var(--blue); }
+.kpi-val.amber  { color: var(--amber); }
+.kpi-val.violet { color: var(--violet); }
+.kpi-val.red    { color: var(--red); }
+
+.kpi-sub { font-size: 10px; color: var(--text3); margin-top: 4px; font-family: var(--mono); }
+
+/* ═══════════════════════════════════════════
+   SECTION CARD (reusable wrapper)
+═══════════════════════════════════════════ */
+.card {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  overflow: hidden;
+}
+
+.card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 22px;
+  border-bottom: 1px solid var(--border);
+  gap: 12px;
+}
+
+.card-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.card-title-icon {
+  width: 26px; height: 26px;
+  border-radius: 7px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 13px;
+}
+
+.card-body { padding: 20px 22px; }
+
+/* ═══════════════════════════════════════════
+   NEWS
+═══════════════════════════════════════════ */
+.news-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 12px;
+}
+
+.news-item {
+  background: var(--panel2);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  padding: 14px 16px;
+  cursor: pointer;
+  transition: border-color var(--trans), background var(--trans);
+}
+
+.news-item:hover { border-color: var(--border-hi); background: var(--panel3); }
+
+.news-headline {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text);
+  line-height: 1.45;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  margin-bottom: 6px;
+}
+
+.news-desc {
+  font-size: 11.5px;
+  color: var(--text2);
+  line-height: 1.5;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  margin-bottom: 10px;
+}
+
+.news-foot { display: flex; justify-content: space-between; align-items: center; }
+.news-source { font-size: 10.5px; font-weight: 700; color: var(--blue); }
+.news-date   { font-size: 10.5px; color: var(--text3); font-family: var(--mono); }
+
+/* ═══════════════════════════════════════════
+   BUTTONS
+═══════════════════════════════════════════ */
+.btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 8px 16px;
+  border-radius: var(--r-sm);
+  border: none;
+  font-family: var(--sans);
+  font-size: 12.5px; font-weight: 600;
+  cursor: pointer;
+  transition: all var(--trans);
+  letter-spacing: 0.01em;
+  text-decoration: none;
+}
+
+.btn-primary {
+  background: var(--blue);
+  color: #fff;
+  box-shadow: 0 2px 12px var(--blue-glow);
+}
+.btn-primary:hover { opacity: 0.88; transform: translateY(-1px); }
+
+.btn-ghost {
+  background: transparent;
+  color: var(--text2);
+  border: 1px solid var(--border);
+}
+.btn-ghost:hover { background: var(--panel2); color: var(--text); border-color: var(--border-hi); }
+
+.btn-danger {
+  background: var(--red-dim);
+  color: var(--red);
+  border: 1px solid rgba(248,113,113,0.2);
+}
+.btn-danger:hover { background: rgba(248,113,113,0.18); }
+
+.btn-success {
+  background: var(--green-dim);
+  color: var(--green);
+  border: 1px solid rgba(52,211,153,0.2);
+}
+.btn-success:hover { background: rgba(52,211,153,0.18); }
+
+.btn-sm { padding: 5px 11px; font-size: 11.5px; }
+
+/* ═══════════════════════════════════════════
+   FORMS
+═══════════════════════════════════════════ */
+.field { display: flex; flex-direction: column; gap: 5px; }
+
+.field-label {
+  font-size: 10.5px; font-weight: 700;
+  letter-spacing: 0.07em; text-transform: uppercase;
+  color: var(--text2);
+}
+
+input[type="text"],
+input[type="number"],
+select {
+  background: var(--panel2);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  padding: 8px 12px;
+  color: var(--text);
+  font-family: var(--sans);
+  font-size: 12.5px;
+  outline: none;
+  transition: border-color var(--trans), box-shadow var(--trans);
+  width: 100%;
+  -webkit-appearance: none;
+}
+
+input:focus, select:focus {
+  border-color: var(--blue);
+  box-shadow: 0 0 0 3px rgba(79,142,247,0.12);
+}
+
+input::placeholder { color: var(--text3); }
+
+select { appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23404760' stroke-width='2.5'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 10px center; padding-right: 30px; }
+
+select option { background: var(--panel2); color: var(--text); }
+
+/* ═══════════════════════════════════════════
+   MANAGE PANEL — 2-col grid
+═══════════════════════════════════════════ */
+.manage-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+@media (max-width: 700px) { .manage-grid { grid-template-columns: 1fr; } }
+
+.manage-block { display: flex; flex-direction: column; gap: 10px; }
+.manage-block-title { font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text2); margin-bottom: 4px; }
+
+.form-row { display: flex; gap: 8px; flex-wrap: wrap; }
+.form-row input, .form-row select { flex: 1; min-width: 80px; }
+
+/* ═══════════════════════════════════════════
+   INVEST SECTION
+═══════════════════════════════════════════ */
+.invest-section {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  overflow: hidden;
+  transition: border-color var(--trans);
+}
+
+.invest-section:hover { border-color: var(--border-hi); }
+
+.invest-head {
+  display: flex; align-items: center;
+  padding: 0 22px;
+  height: 48px;
+  background: var(--panel2);
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+  user-select: none;
+  gap: 10px;
+}
+
+.invest-chevron {
+  color: var(--text3); font-size: 11px;
+  transition: transform var(--trans);
+  margin-left: auto;
+}
+
+.invest-section.open .invest-chevron { transform: rotate(180deg); }
+
+.invest-head-name { font-size: 13px; font-weight: 700; color: var(--text); flex: 1; }
+
+.invest-head-meta {
+  display: flex; gap: 8px; align-items: center;
+}
+
+.invest-portal {
+  font-size: 10.5px; color: var(--blue); font-weight: 600;
+  text-decoration: none;
+  padding: 3px 10px;
+  background: var(--blue-dim);
+  border: 1px solid rgba(79,142,247,0.18);
+  border-radius: 20px;
+  transition: all var(--trans);
+  white-space: nowrap;
+}
+
+.invest-portal:hover { background: rgba(79,142,247,0.2); }
+
+.invest-body-wrap {
+  display: none;
+  padding: 18px 22px;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.invest-section.open .invest-body-wrap { display: flex; }
+
+.params-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  padding: 12px 14px;
+  background: var(--panel2);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+}
+
+@media (max-width: 480px) { .params-row { grid-template-columns: 1fr; } }
+
+.members-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 10px;
+}
+
+.member-tile {
+  background: var(--panel2);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  padding: 12px 14px;
+  transition: border-color var(--trans);
+}
+
+.member-tile:hover { border-color: var(--border-hi); }
+
+.member-tile-name {
+  font-size: 10px; font-weight: 800;
+  letter-spacing: 0.09em; text-transform: uppercase;
+  color: var(--text2); margin-bottom: 7px;
+}
+
+.member-tile input { margin-bottom: 8px; }
+
+.fv-pill {
+  display: flex; justify-content: space-between; align-items: center;
+  background: var(--blue-dim);
+  border: 1px solid rgba(79,142,247,0.12);
+  border-radius: var(--r-sm);
+  padding: 6px 10px;
+  font-size: 11px;
+}
+
+.fv-pill-label { color: var(--text2); font-size: 10px; }
+.fv-pill-val { font-family: var(--mono); color: var(--blue); font-weight: 500; font-size: 11.5px; }
+
+/* category totals row */
+.cat-totals {
+  display: flex; flex-wrap: wrap; gap: 8px;
+  padding: 12px 14px;
+  background: var(--panel2);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+}
+
+.cat-total-item { flex: 1; min-width: 140px; }
+.cat-total-label { font-size: 10px; font-weight: 700; letter-spacing: 0.07em; text-transform: uppercase; color: var(--text2); margin-bottom: 3px; }
+.cat-total-val { font-family: var(--mono); font-size: 1rem; color: var(--green); font-weight: 500; }
+
+/* ═══════════════════════════════════════════
+   GRAND TOTAL / CHARTS
+═══════════════════════════════════════════ */
+.grand-grid {
+  display: flex; flex-wrap: wrap; gap: 0;
+  background: var(--panel2);
+  border-radius: var(--r-sm);
+  overflow: hidden;
+  border: 1px solid var(--border);
+}
+
+.grand-item {
+  flex: 1; min-width: 160px;
+  padding: 16px 20px;
+  border-right: 1px solid var(--border);
+}
+
+.grand-item:last-child { border-right: none; }
+
+.grand-label { font-size: 10.5px; font-weight: 700; letter-spacing: 0.07em; text-transform: uppercase; color: var(--text2); margin-bottom: 6px; }
+.grand-val   { font-family: var(--mono); font-size: 1.05rem; color: var(--text); font-weight: 500; }
+.grand-val.hi { color: var(--green); }
+
+.chart-wrap { position: relative; max-width: 580px; margin: 0 auto; }
+
+/* ═══════════════════════════════════════════
+   TOAST
+═══════════════════════════════════════════ */
+#toast-root {
+  position: fixed; bottom: 24px; right: 24px; z-index: 9999;
+  display: flex; flex-direction: column; gap: 8px; pointer-events: none;
+}
+
+.toast {
+  background: var(--panel3);
+  border: 1px solid var(--border-hi);
+  border-radius: var(--r);
+  padding: 12px 18px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text);
+  box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+  pointer-events: auto;
+  display: flex; align-items: center; gap: 8px;
+  animation: toast-in 0.22s ease;
+  max-width: 320px;
+}
+
+.toast.success { border-left: 3px solid var(--green); }
+.toast.error   { border-left: 3px solid var(--red); }
+.toast.info    { border-left: 3px solid var(--blue); }
+
+@keyframes toast-in {
+  from { opacity: 0; transform: translateX(20px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+/* ═══════════════════════════════════════════
+   DIVIDER
+═══════════════════════════════════════════ */
+.divider { height: 1px; background: var(--border); }
+
+/* ═══════════════════════════════════════════
+   INVEST SECTIONS WRAPPER
+═══════════════════════════════════════════ */
+#investment-sections { display: flex; flex-direction: column; gap: 10px; }
+
+/* ═══════════════════════════════════════════
+   EXPORT BAR
+═══════════════════════════════════════════ */
+.export-bar {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  padding: 16px 22px;
+  display: flex; align-items: center; gap: 16px;
+  justify-content: space-between;
+}
+
+.export-bar-text strong { display: block; font-size: 13px; font-weight: 700; color: var(--text); margin-bottom: 2px; }
+.export-bar-text span   { font-size: 11.5px; color: var(--text2); }
+
+/* ═══════════════════════════════════════════
+   RESPONSIVE
+═══════════════════════════════════════════ */
+@media (max-width: 768px) {
+  :root { --sidebar-w: 0px; }
+  .sidebar { display: none; }
+  .topbar  { padding: 0 16px; }
+  .content { padding: 16px 16px 60px; }
+  .market-strip { grid-template-columns: 1fr; }
+  .kpi-grid { grid-template-columns: 1fr 1fr; }
+}
+
+/* ═══════════════════════════════════════════
+   SCROLL
+═══════════════════════════════════════════ */
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--panel3); border-radius: 10px; }
+</style>
+</head>
+<body>
+
+<div id="toast-root"></div>
+
+<div class="app-shell">
+
+  <!-- SIDEBAR -->
+  <nav class="sidebar">
+    <div class="sidebar-logo">F</div>
+
+    <button class="nav-item active" title="Dashboard">
+      <span>⬛</span>
+      <span class="nav-tooltip">Dashboard</span>
+    </button>
+    <button class="nav-item" title="Investments">
+      <span>📈</span>
+      <span class="nav-tooltip">Investments</span>
+    </button>
+    <button class="nav-item" title="Properties">
+      <span>🏠</span>
+      <span class="nav-tooltip">Properties</span>
+    </button>
+    <button class="nav-item" title="News">
+      <span>📰</span>
+      <span class="nav-tooltip">News Feed</span>
+    </button>
+
+    <div class="sidebar-spacer"></div>
+
+    <button class="nav-item" title="Export">
+      <span>⬇</span>
+      <span class="nav-tooltip">Export</span>
+    </button>
+    <button class="nav-item" title="Settings">
+      <span>⚙</span>
+      <span class="nav-tooltip">Manage</span>
+    </button>
+  </nav>
+
+  <!-- MAIN -->
+  <div class="main-area">
+
+    <!-- TOPBAR -->
+    <header class="topbar">
+      <div class="topbar-title">
+        FinTrack
+        <small>Sameer Sir · Personal Portfolio</small>
+      </div>
+      <div class="topbar-actions">
+        <div class="live-dot">Live</div>
+        <button class="btn btn-success btn-sm" id="downloadExcel">↓ Export XLSX</button>
+      </div>
+    </header>
+
+    <!-- CONTENT -->
+    <div class="content">
+
+      <!-- Market Prices -->
+      <div class="market-strip">
+        <div class="mkt-card">
+          <div class="mkt-icon nifty">📊</div>
+          <div class="mkt-info">
+            <div class="mkt-name">NIFTY 50</div>
+            <div class="mkt-price" id="nifty-price">—</div>
+            <div class="mkt-change neutral" id="nifty-change">Loading</div>
+            <div class="mkt-updated" id="nifty-update">Fetching...</div>
+          </div>
+        </div>
+        <div class="mkt-card">
+          <div class="mkt-icon gold">🥇</div>
+          <div class="mkt-info">
+            <div class="mkt-name">Gold · ₹/10g</div>
+            <div class="mkt-price" id="gold-price">—</div>
+            <div class="mkt-change neutral" id="gold-change">Loading</div>
+            <div class="mkt-updated" id="gold-update">Fetching...</div>
+          </div>
+        </div>
+        <div class="mkt-card">
+          <div class="mkt-icon silver">🥈</div>
+          <div class="mkt-info">
+            <div class="mkt-name">Silver · ₹/kg</div>
+            <div class="mkt-price" id="silver-price">—</div>
+            <div class="mkt-change neutral" id="silver-change">Loading</div>
+            <div class="mkt-updated" id="silver-update">Fetching...</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- News Ticker -->
+      <div class="ticker-wrap">
+        <div class="ticker-inner" id="ticker-inner">
+          <div class="ticker-item"><span>●</span> Loading latest market updates...</div>
+          <div class="ticker-item"><span>●</span> Loading latest market updates...</div>
+        </div>
+      </div>
+
+      <!-- KPI Grid -->
+      <div class="kpi-grid">
+        <div class="kpi"><div class="kpi-label">Total Assets</div><div class="kpi-val blue" id="total-assets">₹0</div></div>
+        <div class="kpi"><div class="kpi-label">Liabilities</div><div class="kpi-val red" id="total-liabilities">₹0</div></div>
+        <div class="kpi"><div class="kpi-label">Net Worth</div><div class="kpi-val green" id="net-worth">₹0</div></div>
+        <div class="kpi"><div class="kpi-label">Future Net Worth</div><div class="kpi-val blue" id="future-net-worth">₹0</div></div>
+        <div class="kpi"><div class="kpi-label">Monthly Income</div><div class="kpi-val amber" id="monthly-income">₹0</div></div>
+        <div class="kpi"><div class="kpi-label">Avg Return</div><div class="kpi-val amber" id="avg-return-rate">0%</div></div>
+        <div class="kpi"><div class="kpi-label">Growth</div><div class="kpi-val violet" id="growth-rate">0%</div></div>
+        <div class="kpi"><div class="kpi-label">CAGR</div><div class="kpi-val violet" id="cagr-rate">0%</div></div>
+        <div class="kpi"><div class="kpi-label">Mthly Avg Return</div><div class="kpi-val" id="monthly-avg-return">0%</div></div>
+      </div>
+
+      <!-- Manage Panel -->
+      <div class="card">
+        <div class="card-head">
+          <div class="card-title">
+            <div class="card-title-icon" style="background:var(--violet-dim);color:var(--violet);">⚙</div>
+            Manage Portfolio
+          </div>
+          <button class="btn btn-ghost btn-sm" id="manage-toggle-btn" style="font-size:11px;">Hide ▲</button>
+        </div>
+        <div class="card-body">
+          <div class="manage-grid">
+            <div class="manage-block">
+              <div class="manage-block-title">Add Category</div>
+              <form id="add-category-form" style="display:flex;flex-direction:column;gap:8px;">
+                <input type="text" id="new-category-name" placeholder="Category name" required>
+                <input type="text" id="new-category-url" placeholder="Portal URL (optional)">
+                <div class="form-row">
+                  <input type="number" id="new-category-years" placeholder="Yrs" value="10" min="1" max="50">
+                  <input type="number" id="new-category-rate" placeholder="Rate %" value="8" min="-30" max="30" step="0.1">
+                </div>
+                <button type="submit" class="btn btn-primary">+ Add Category</button>
+              </form>
+              <div class="divider"></div>
+              <div class="manage-block-title">Add Member</div>
+              <form id="add-member-form" style="display:flex;gap:8px;">
+                <input type="text" id="new-member-name" placeholder="Member name" required style="flex:1;">
+                <button type="submit" class="btn btn-primary">+ Add</button>
+              </form>
+            </div>
+            <div class="manage-block">
+              <div class="manage-block-title">Remove Category</div>
+              <form id="remove-category-form" style="display:flex;gap:8px;">
+                <select id="remove-category-select" style="flex:1;"><option value="">Select Category</option></select>
+                <button type="submit" class="btn btn-danger">Remove</button>
+              </form>
+              <div class="divider"></div>
+              <div class="manage-block-title">Remove Member</div>
+              <form id="remove-member-form" style="display:flex;gap:8px;">
+                <select id="remove-member-select" style="flex:1;"><option value="">Select Member</option></select>
+                <button type="submit" class="btn btn-danger">Remove</button>
+              </form>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Investment Sections -->
+      <div id="investment-sections"></div>
+
+      <!-- Grand Total -->
+      <div class="card">
+        <div class="card-head">
+          <div class="card-title">
+            <div class="card-title-icon" style="background:var(--green-dim);color:var(--green);">₹</div>
+            Grand Total
+          </div>
+        </div>
+        <div class="card-body" style="padding-top:12px;">
+          <div class="grand-grid">
+            <div class="grand-item">
+              <div class="grand-label">Grand Total</div>
+              <div class="grand-val hi" id="grand-total">₹0</div>
+            </div>
+            <div class="grand-item">
+              <div class="grand-label">Avg Return Rate</div>
+              <div class="grand-val" id="grand-avg-return">0%</div>
+            </div>
+            <div class="grand-item">
+              <div class="grand-label">Monthly Income</div>
+              <div class="grand-val hi" id="grand-monthly">₹0</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Charts row -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+        <div class="card">
+          <div class="card-head">
+            <div class="card-title">
+              <div class="card-title-icon" style="background:var(--blue-dim);color:var(--blue);">◉</div>
+              Distribution
+            </div>
+          </div>
+          <div class="card-body">
+            <div class="chart-wrap"><canvas id="investmentPieChart"></canvas></div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-head">
+            <div class="card-title">
+              <div class="card-title-icon" style="background:var(--violet-dim);color:var(--violet);">▦</div>
+              Current vs Future
+            </div>
+          </div>
+          <div class="card-body">
+            <div class="chart-wrap"><canvas id="investmentBarChart"></canvas></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- News -->
+      <div class="card">
+        <div class="card-head">
+          <div class="card-title">
+            <div class="card-title-icon" style="background:var(--amber-dim);color:var(--amber);">📰</div>
+            Market News
+          </div>
+          <button class="btn btn-ghost btn-sm" id="refresh-news">⟳ Refresh</button>
+        </div>
+        <div class="card-body">
+          <div class="news-grid" id="news-grid">
+            <div style="color:var(--text2);font-size:12px;padding:10px 0;">Loading news feed…</div>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /content -->
+  </div><!-- /main-area -->
+</div><!-- /app-shell -->
+
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+
+/* ─────────────────────────────── TOAST ─────────────────────────────── */
+function toast(msg, type = 'info') {
+  const root = document.getElementById('toast-root');
+  const el = document.createElement('div');
+  el.className = `toast ${type}`;
+  el.textContent = msg;
+  root.appendChild(el);
+  setTimeout(() => el.remove(), 3200);
+}
+
+/* ─────────────────────────────── NEWS ─────────────────────────────── */
+async function fetchNews() {
+  try {
+    const r = await fetch('/api/news', { headers: { Accept: 'application/json' } });
+    const d = await r.json();
+    if (d.status === 'ok' && d.articles?.length) {
+      // Ticker
+      const items = d.articles.slice(0,8).map(a => `<div class="ticker-item"><span>●</span> ${a.title}</div>`).join('');
+      document.getElementById('ticker-inner').innerHTML = items + items; // doubled for seamless loop
+
+      // Grid
+      document.getElementById('news-grid').innerHTML = d.articles.slice(0,6).map(a => `
+        <div class="news-item">
+          <div class="news-headline">${a.title}</div>
+          <div class="news-desc">${a.description || ''}</div>
+          <div class="news-foot">
+            <span class="news-source">${a.source.name}</span>
+            <span class="news-date">${new Date(a.publishedAt).toLocaleDateString('en-IN')}</span>
+          </div>
+        </div>`).join('');
+    } else {
+      document.getElementById('news-grid').innerHTML = '<div style="color:var(--text2);font-size:12px;">No news available.</div>';
+    }
+  } catch {
+    document.getElementById('news-grid').innerHTML = '<div style="color:var(--text2);font-size:12px;">Could not load news.</div>';
+  }
+}
+
+/* ─────────────────────────────── MARKET ─────────────────────────────── */
+async function fetchMarketPrices() {
+  try {
+    const r = await fetch('/api/market-prices');
+    const d = await r.json();
+
+    function setMkt(id, priceVal, change) {
+      document.getElementById(`${id}-price`).textContent = fmt(priceVal);
+      const el = document.getElementById(`${id}-change`);
+      const pct = change.toFixed(2);
+      el.textContent = `${change >= 0 ? '▲' : '▼'} ${Math.abs(pct)}%`;
+      el.className = `mkt-change ${change >= 0 ? 'up' : 'down'}`;
+      document.getElementById(`${id}-update`).textContent = `Updated ${new Date().toLocaleTimeString('en-IN')}`;
+    }
+
+    if (d.nifty && !d.nifty.error) {
+      const ch = d.nifty.lastPrice - d.nifty.previousClose;
+      setMkt('nifty', d.nifty.lastPrice, ch / d.nifty.previousClose * 100);
+    }
+    if (d.gold?.price) {
+      const gp = d.gold.price / 31.1034768 * 10;
+      setMkt('gold', gp, d.gold.ch / (gp - d.gold.ch) * 100);
+    }
+    if (d.silver?.price) {
+      const sp = d.silver.price * 32.150746;
+      setMkt('silver', sp, d.silver.ch / (sp - d.silver.ch) * 100);
+    }
+  } catch { /* silent fail */ }
+}
+
+/* ─────────────────────────────── DATA ─────────────────────────────── */
+let categories = [
+  { id:'mutual-fund',   name:'1. Mutual Fund',       url:'https://symphonia.investwell.app/app/#/login',                              years:10, rate:12,   type:'investment' },
+  { id:'icici-direct',  name:'2. ICICI Direct',       url:'https://secure.icicidirect.com/customer/login',                            years:8,  rate:10,   type:'investment' },
+  { id:'icici-bank',    name:'3. ICICI Bank',         url:'https://www.icicibank.com/personal-banking/insta-banking/internet-banking', years:5,  rate:6,    type:'investment' },
+  { id:'nps',           name:'4. NPS',                url:'https://enps.nsdl.com/eNPS/NationalPensionSystem.html',                    years:15, rate:10,   type:'investment' },
+  { id:'ppf',           name:'5. PPF',                url:'https://www.indiapost.gov.in',                                             years:15, rate:7.1,  type:'investment' },
+  { id:'lic',           name:'6. LIC',                url:'https://licindia.in',                                                      years:10, rate:5,    type:'investment' },
+  { id:'fd',            name:'7. FD / RD',            url:'https://www.icicibank.com',                                                years:5,  rate:7,    type:'investment' },
+  { id:'stocks',        name:'8. Stocks',             url:'https://zerodha.com',                                                      years:10, rate:15,   type:'investment' },
+  { id:'crypto',        name:'9. Crypto',             url:'https://wazirx.com',                                                       years:5,  rate:20,   type:'investment' },
+  { id:'gold-invest',   name:'10. Gold (Phys/SGB)',   url:'https://www.rbi.org.in',                                                   years:10, rate:8,    type:'investment' },
+  { id:'epf',           name:'11. EPF',               url:'https://unifiedportal-mem.epfindia.gov.in',                                years:20, rate:8.15, type:'investment' },
+  { id:'bonds',         name:'12. Bonds',             url:'https://www.nseindia.com',                                                 years:5,  rate:7,    type:'investment' },
+  { id:'others',        name:'13. Others',            url:'',                                                                         years:10, rate:8,    type:'investment' },
+  { id:'property-value', name:'14. Property Value',  url:'', type:'property',
+    properties:[
+      { id:'home',       name:'Home' },
+      { id:'plot',       name:'Plot' },
+      { id:'commercial', name:'Commercial' }
+    ]
+  }
+];
+
+let familyMembers = ['Sameer','Meenakshi','Sameeksha','Sakshi'];
+
+loadFromBackend();
+fetchNews();
+document.getElementById('refresh-news').addEventListener('click', () => { fetchNews(); toast('News refreshed', 'info'); });
+setInterval(fetchNews, 5 * 60 * 1000);
+fetchMarketPrices();
+setInterval(fetchMarketPrices, 60000);
+
+// Manage panel collapse toggle
+document.getElementById('manage-toggle-btn').addEventListener('click', function() {
+  const body = this.closest('.card').querySelector('.card-body');
+  const isHidden = body.style.display === 'none';
+  body.style.display = isHidden ? '' : 'none';
+  this.textContent = isHidden ? 'Hide ▲' : 'Show ▼';
+});
+
+/* ─────────────────────────────── INIT ─────────────────────────────── */
+function initializeApp() {
+  renderInvestmentSections();
+  updateRemoveOptions();
+  setupManagementForms();
+  recalculateAllFutureValues();
+  updateGrandTotal();
+}
+
+/* ─────────────────────────────── RENDER ─────────────────────────────── */
+function renderInvestmentSections() {
+  const container = document.getElementById('investment-sections');
+  container.innerHTML = '';
+
+  categories.forEach((cat, idx) => {
+    const sec = document.createElement('div');
+    // Open first 3 sections by default so content is immediately visible
+    sec.className = idx < 3 ? 'invest-section open' : 'invest-section';
+    sec.id = `${cat.id}-section`;
+
+    sec.innerHTML = `
+      <div class="invest-head" data-toggle="${cat.id}">
+        <div class="invest-head-name">${cat.name}</div>
+        <div class="invest-head-meta">
+          ${cat.url ? `<a href="${cat.url}" target="_blank" class="invest-portal" data-portal="true">↗ Portal</a>` : ''}
+        </div>
+        <span class="invest-chevron">▼</span>
+      </div>
+      <div class="invest-body-wrap" id="${cat.id}-body">
+        ${cat.type === 'investment' ? `
+        <div class="params-row">
+          <div class="field">
+            <div class="field-label">Duration (Years)</div>
+            <input type="number" id="${cat.id}-years" value="${cat.years}" min="1" max="50">
+          </div>
+          <div class="field">
+            <div class="field-label">Annual Return (%)</div>
+            <input type="number" id="${cat.id}-rate" value="${cat.rate}" min="-30" max="30" step="0.1">
+          </div>
+        </div>` : ''}
+        <div class="members-grid" id="${cat.id}-row"></div>
+        <div class="cat-totals" id="${cat.id}-totals-row">
+          <div class="cat-total-item">
+            <div class="cat-total-label">Current Total</div>
+            <div class="cat-total-val" id="${cat.id}-total">₹0</div>
+          </div>
+          ${cat.type === 'investment' ? `
+          <div class="cat-total-item">
+            <div class="cat-total-label">Future Total</div>
+            <div class="cat-total-val" id="${cat.id}-future-total">₹0</div>
+          </div>` : ''}
+          ${cat.type === 'property' ? `
+          <div class="cat-total-item">
+            <div class="cat-total-label">Rental / yr</div>
+            <div class="cat-total-val" id="${cat.id}-rental-total">₹0</div>
+          </div>
+          <div class="cat-total-item">
+            <div class="cat-total-label">Property Total</div>
+            <div class="cat-total-val" id="${cat.id}-property-total">₹0</div>
+          </div>` : ''}
+        </div>
+      </div>
+    `;
+    container.appendChild(sec);
+
+    // Attach header click via JS — never inline onclick inside innerHTML
+    const head = sec.querySelector('.invest-head');
+    head.addEventListener('click', (e) => {
+      // If the portal link was clicked, don't toggle the section
+      if (e.target.closest('[data-portal]')) return;
+      sec.classList.toggle('open');
+    });
+
+    if (cat.type === 'property') renderPropertyItems(cat.id, cat.properties);
+    else renderFamilyMembers(cat.id);
+    setupEventListeners(cat.id);
+  });
+
+  updateInvestmentPieChart();
+  updateInvestmentBarChart();
+  setupAllChartListeners();
+}
+
+function renderFamilyMembers(categoryId) {
+  const row = document.getElementById(`${categoryId}-row`);
+  row.innerHTML = '';
+  familyMembers.forEach(member => {
+    const div = document.createElement('div');
+    div.className = 'member-tile';
+    div.innerHTML = `
+      <div class="member-tile-name">${member}</div>
+      <input type="number" id="${categoryId}-${member.toLowerCase()}" placeholder="Current Value (₹)" data-person="${member}" data-category="${categoryId}" min="0">
+      <div class="fv-pill">
+        <span class="fv-pill-label">Future</span>
+        <span class="fv-pill-val" id="${categoryId}-${member.toLowerCase()}-future">₹0</span>
+      </div>`;
+    row.appendChild(div);
+  });
+}
+
+function renderPropertyItems(categoryId, properties) {
+  const row = document.getElementById(`${categoryId}-row`);
+  row.innerHTML = '';
+  properties.forEach(p => {
+    const div = document.createElement('div');
+    div.className = 'member-tile';
+    div.innerHTML = `
+      <div class="member-tile-name">${p.name}</div>
+      <input type="number" id="${categoryId}-${p.id}-value" placeholder="Property Value (₹)" data-property="${p.id}" data-category="${categoryId}" min="0">
+      <input type="number" id="${categoryId}-${p.id}-rental" placeholder="Rental / Year (₹)" data-property="${p.id}" data-category="${categoryId}" min="0" style="margin-top:8px;">`;
+    row.appendChild(div);
+  });
+}
+
+/* ─────────────────────────────── EVENTS ─────────────────────────────── */
+function setupEventListeners(categoryId) {
+  document.querySelectorAll(`input[data-category="${categoryId}"]`).forEach(input => {
+    input.addEventListener('input', function() {
+      if (categoryId !== 'property-value') updateFutureValue(this);
+      updateCategoryTotals(categoryId);
+      updateSummaryTotals();
+      updateGrandTotal();
+      scheduleSave();
+    });
+  });
+  if (categoryId !== 'property-value') {
+    const yi = document.getElementById(`${categoryId}-years`);
+    const ri = document.getElementById(`${categoryId}-rate`);
+    if (yi) yi.addEventListener('input', () => { recalculateCategoryFutureValues(categoryId); updateGrandTotal(); scheduleSave(); });
+    if (ri) ri.addEventListener('input', () => { recalculateCategoryFutureValues(categoryId); updateGrandTotal(); scheduleSave(); });
+  }
+}
+
+function setupManagementForms() {
+  document.getElementById('add-category-form').addEventListener('submit', e => {
+    e.preventDefault();
+    const name  = document.getElementById('new-category-name').value.trim();
+    const url   = document.getElementById('new-category-url').value.trim();
+    const years = parseInt(document.getElementById('new-category-years').value) || 10;
+    const rate  = parseFloat(document.getElementById('new-category-rate').value) || 8;
+    if (name && !categories.some(c => c.name.toLowerCase() === name.toLowerCase())) {
+      const id = name.toLowerCase().replace(/\s+/g,'-').replace(/^\d+\.\s*/,'');
+      categories.push({ id, name, url, years, rate, type:'investment' });
+      renderInvestmentSections(); updateRemoveOptions(); recalculateAllFutureValues(); updateGrandTotal();
+      e.target.reset();
+      toast(`"${name}" added`, 'success');
+      saveToBackend();
+    }
+  });
+  document.getElementById('add-member-form').addEventListener('submit', e => {
+    e.preventDefault();
+    const name = document.getElementById('new-member-name').value.trim();
+    if (name && !familyMembers.includes(name)) {
+      familyMembers.push(name);
+      renderInvestmentSections(); updateRemoveOptions(); recalculateAllFutureValues(); updateGrandTotal();
+      e.target.reset();
+      toast(`"${name}" added`, 'success');
+      saveToBackend();
+    }
+  });
+  document.getElementById('remove-category-form').addEventListener('submit', e => {
+    e.preventDefault();
+    const id = document.getElementById('remove-category-select').value;
+    if (id) {
+      const name = categories.find(c => c.id === id)?.name;
+      categories = categories.filter(c => c.id !== id);
+      renderInvestmentSections(); updateRemoveOptions(); recalculateAllFutureValues(); updateGrandTotal();
+      toast(`"${name}" removed`, 'error');
+      saveToBackend();
+    }
+  });
+  document.getElementById('remove-member-form').addEventListener('submit', e => {
+    e.preventDefault();
+    const member = document.getElementById('remove-member-select').value;
+    if (member) {
+      familyMembers = familyMembers.filter(m => m !== member);
+      renderInvestmentSections(); updateRemoveOptions(); recalculateAllFutureValues(); updateGrandTotal();
+      toast(`"${member}" removed`, 'error');
+      saveToBackend();
+    }
+  });
+}
+
+function updateRemoveOptions() {
+  const cs = document.getElementById('remove-category-select');
+  cs.innerHTML = '<option value="">Select Category</option>';
+  categories.forEach(c => { const o = document.createElement('option'); o.value=c.id; o.textContent=c.name; cs.appendChild(o); });
+
+  const ms = document.getElementById('remove-member-select');
+  ms.innerHTML = '<option value="">Select Member</option>';
+  familyMembers.forEach(m => { const o = document.createElement('option'); o.value=m; o.textContent=m; ms.appendChild(o); });
+}
+
+/* ─────────────────────────────── CALCS ─────────────────────────────── */
+function fv(pv, years, rate) { return pv * Math.pow(1 + rate / 100, years); }
+
+function updateFutureValue(input) {
+  const cv = parseFloat(input.value) || 0;
+  const cat = categories.find(c => c.id === input.dataset.category);
+  const years = parseInt(document.getElementById(`${cat.id}-years`)?.value) || cat.years;
+  const rate  = parseFloat(document.getElementById(`${cat.id}-rate`)?.value)  || cat.rate;
+  const el    = document.getElementById(`${cat.id}-${input.dataset.person.toLowerCase()}-future`);
+  if (el) el.textContent = fmt(fv(cv, years, rate));
+}
+
+function updateCategoryTotals(catId) {
+  let cur = 0, fut = 0, rental = 0;
+  const cat = categories.find(c => c.id === catId);
+  const years = cat.type === 'investment' ? (parseInt(document.getElementById(`${catId}-years`)?.value) || cat.years) : 0;
+  const rate  = cat.type === 'investment' ? (parseFloat(document.getElementById(`${catId}-rate`)?.value)  || cat.rate)  : 0;
+
+  if (cat.type === 'property') {
+    cat.properties.forEach(p => {
+      const vi = document.getElementById(`${catId}-${p.id}-value`);
+      const ri = document.getElementById(`${catId}-${p.id}-rental`);
+      if (vi) cur    += parseFloat(vi.value) || 0;
+      if (ri) rental += parseFloat(ri.value) || 0;
+    });
+  } else {
+    familyMembers.forEach(m => {
+      const inp = document.getElementById(`${catId}-${m.toLowerCase()}`);
+      if (inp) { const v = parseFloat(inp.value)||0; cur += v; fut += fv(v,years,rate); }
+    });
+  }
+
+  const set = (id, val) => { const el = document.getElementById(id); if(el) el.textContent = fmt(val); };
+  set(`${catId}-total`, cur);
+  set(`${catId}-future-total`, fut);
+  set(`${catId}-rental-total`, rental);
+  set(`${catId}-property-total`, cur + rental);
+}
+
+function updateSummaryTotals() {
+  let ta=0, tl=0, tfa=0, tr=0, ic=0, my=0;
+  categories.forEach(cat => {
+    if (cat.type === 'property') {
+      cat.properties.forEach(p => {
+        const vi = document.getElementById(`${cat.id}-${p.id}-value`);
+        if (vi) ta += parseFloat(vi.value)||0;
+      });
+    } else {
+      const y = parseInt(document.getElementById(`${cat.id}-years`)?.value) || cat.years;
+      const r = parseFloat(document.getElementById(`${cat.id}-rate`)?.value)  || cat.rate;
+      tr += r; ic++; if (y > my) my = y;
+      familyMembers.forEach(m => {
+        const inp = document.getElementById(`${cat.id}-${m.toLowerCase()}`);
+        if (inp) { const v = parseFloat(inp.value)||0; ta += v; tfa += fv(v,y,r); }
+      });
+    }
+  });
+  const nw = ta - tl, fnw = tfa - tl;
+  const avg = ic > 0 ? tr / ic : 0;
+  const gr  = nw > 0 ? ((fnw - nw) / nw * 100).toFixed(1) : 0;
+  const cagr= nw > 0 && my > 0 ? ((Math.pow(fnw/nw, 1/my)-1)*100).toFixed(1) : 0;
+
+  const set = (id, val) => { const el = document.getElementById(id); if(el) el.textContent = val; };
+  set('total-assets',       fmt(ta));
+  set('total-liabilities',  fmt(tl));
+  set('net-worth',          fmt(nw));
+  set('future-net-worth',   fmt(fnw));
+  set('avg-return-rate',    `${avg.toFixed(1)}%`);
+  set('monthly-income',     fmt(fnw/12));
+  set('growth-rate',        `${gr}%`);
+  set('cagr-rate',          `${cagr}%`);
+  set('monthly-avg-return', `${(avg/12).toFixed(2)}%`);
+}
+
+function updateGrandTotal() {
+  const fnwEl = document.getElementById('future-net-worth');
+  const pvEl  = document.getElementById('property-value-property-total');
+  const fnw   = fnwEl ? parseFloat(fnwEl.textContent.replace(/[₹,]/g,''))||0 : 0;
+  const pv    = pvEl  ? parseFloat(pvEl.textContent.replace(/[₹,]/g,'')) ||0 : 0;
+  const g     = fnw + pv;
+  const set = (id, val) => { const el = document.getElementById(id); if(el) el.textContent = val; };
+  set('grand-total',     fmt(g));
+  set('grand-monthly',   fmt(g/12));
+  set('grand-avg-return', document.getElementById('avg-return-rate').textContent);
+}
+
+function recalculateCategoryFutureValues(catId) {
+  if (catId !== 'property-value') {
+    familyMembers.forEach(m => {
+      const inp = document.getElementById(`${catId}-${m.toLowerCase()}`);
+      if (inp) updateFutureValue(inp);
+    });
+  }
+  updateCategoryTotals(catId);
+  updateSummaryTotals();
+  updateGrandTotal();
+}
+
+function recalculateAllFutureValues() {
+  categories.forEach(c => recalculateCategoryFutureValues(c.id));
+  updateGrandTotal();
+}
+
+function fmt(v) {
+  return '₹' + v.toLocaleString('en-IN', { maximumFractionDigits: 0 });
+}
+
+/* ─────────────────────────────── EXCEL ─────────────────────────────── */
+document.getElementById('downloadExcel').addEventListener('click', () => {
+  const wb = XLSX.utils.book_new();
+  const summaryData = [
+    ['Financial Summary',''],
+    ['Total Assets',           document.getElementById('total-assets').textContent],
+    ['Total Liabilities',      document.getElementById('total-liabilities').textContent],
+    ['Net Worth',              document.getElementById('net-worth').textContent],
+    ['Future Net Worth',       document.getElementById('future-net-worth').textContent],
+    ['Growth Rate',            document.getElementById('growth-rate').textContent],
+    ['CAGR',                   document.getElementById('cagr-rate').textContent],
+    ['Average Return Rate',    document.getElementById('avg-return-rate').textContent],
+    ['Monthly Avg Return',     document.getElementById('monthly-avg-return').textContent],
+    ['Monthly Income',         document.getElementById('monthly-income').textContent],
+    ['Grand Total',            document.getElementById('grand-total').textContent],
+    ['Grand Avg Return',       document.getElementById('grand-avg-return').textContent],
+    ['Grand Monthly Income',   document.getElementById('grand-monthly').textContent],
+  ];
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(summaryData), 'Summary');
+
+  const invData = [['Category','Member / Property','Current Value','Future Value','Years','Rate']];
+  categories.forEach(cat => {
+    if (cat.type === 'investment') {
+      const y = parseInt(document.getElementById(`${cat.id}-years`)?.value) || cat.years;
+      const r = parseFloat(document.getElementById(`${cat.id}-rate`)?.value)  || cat.rate;
+      familyMembers.forEach(m => {
+        const inp = document.getElementById(`${cat.id}-${m.toLowerCase()}`);
+        if (inp) { const v = parseFloat(inp.value)||0; invData.push([cat.name, m, v, fv(v,y,r), y, r]); }
+      });
+    } else {
+      cat.properties.forEach(p => {
+        const vi = document.getElementById(`${cat.id}-${p.id}-value`);
+        const ri = document.getElementById(`${cat.id}-${p.id}-rental`);
+        if (vi) invData.push([cat.name, p.name, parseFloat(vi.value)||0, (parseFloat(vi.value)||0)+(parseFloat(ri?.value)||0), 'N/A','N/A']);
+      });
+    }
+  });
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(invData), 'Investments');
+
+  const buf = XLSX.write(wb, { bookType:'xlsx', type:'array' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([buf], { type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }));
+  a.download = `FinTrack_${new Date().toISOString().split('T')[0]}.xlsx`;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  toast('Export downloaded ✓', 'success');
+});
+
+/* ─────────────────────────────── CHARTS ─────────────────────────────── */
+Chart.defaults.color           = '#8892aa';
+Chart.defaults.borderColor     = 'rgba(255,255,255,0.06)';
+Chart.defaults.font.family     = 'Plus Jakarta Sans';
+
+const PALETTE = ['#4f8ef7','#a78bfa','#34d399','#fbbf24','#f87171','#38bdf8','#fb923c','#e879f9','#4ade80','#60a5fa','#c084fc','#f472b6','#34d399','#facc15','#f87171','#2dd4bf'];
+
+let pieChart = null, barChart = null;
+
+function updateInvestmentPieChart() {
+  const labels=[], data=[];
+  categories.forEach(cat => {
+    if (cat.type === 'investment') {
+      let t = 0;
+      familyMembers.forEach(m => { const inp = document.getElementById(`${cat.id}-${m.toLowerCase()}`); if(inp) t += parseFloat(inp.value)||0; });
+      if (t > 0) { labels.push(cat.name.replace(/^\d+\.\s*/,'')); data.push(t); }
+    }
+  });
+  if (pieChart) pieChart.destroy();
+  const ctx = document.getElementById('investmentPieChart').getContext('2d');
+  pieChart = new Chart(ctx, {
+    type: 'doughnut',
+    data: { labels, datasets: [{ data, backgroundColor: PALETTE.slice(0,labels.length), borderColor: 'rgba(0,0,0,0.25)', borderWidth: 2 }] },
+    options: {
+      responsive: true,
+      cutout: '68%',
+      plugins: {
+        legend: { position:'bottom', labels:{ padding:14, font:{ size:10 }, color:'#8892aa', boxWidth:10, borderRadius:3 } },
+      }
+    }
+  });
+}
+
+function updateInvestmentBarChart() {
+  const labels=[], cur=[], fut=[];
+  categories.forEach(cat => {
+    if (cat.type === 'investment') {
+      let ct=0, ft=0;
+      const y = parseInt(document.getElementById(`${cat.id}-years`)?.value) || cat.years;
+      const r = parseFloat(document.getElementById(`${cat.id}-rate`)?.value)  || cat.rate;
+      familyMembers.forEach(m => { const inp = document.getElementById(`${cat.id}-${m.toLowerCase()}`); if(inp){ const v=parseFloat(inp.value)||0; ct+=v; ft+=fv(v,y,r); }});
+      if (ct > 0 || ft > 0) { labels.push(cat.name.replace(/^\d+\.\s*/,'')); cur.push(ct); fut.push(ft); }
+    }
+  });
+  if (barChart) barChart.destroy();
+  const ctx = document.getElementById('investmentBarChart').getContext('2d');
+  barChart = new Chart(ctx, {
+    type: 'bar',
+    data: { labels, datasets: [
+      { label:'Current', data:cur, backgroundColor:'rgba(79,142,247,0.7)',   borderRadius:4, borderSkipped:false },
+      { label:'Future',  data:fut, backgroundColor:'rgba(167,139,250,0.65)', borderRadius:4, borderSkipped:false }
+    ]},
+    options: {
+      responsive: true,
+      plugins: { legend:{ position:'top', labels:{ font:{size:11}, padding:14 } } },
+      scales: {
+        y: { beginAtZero:true, grid:{ color:'rgba(255,255,255,0.04)' }, ticks:{ callback: v => '₹'+v.toLocaleString('en-IN',{maximumFractionDigits:0}), font:{size:10}, color:'#8892aa' } },
+        x: { grid:{ display:false }, ticks:{ font:{size:10}, color:'#8892aa', maxRotation:30 } }
+      }
+    }
+  });
+}
+
+function setupAllChartListeners() {
+  categories.forEach(cat => {
+    if (cat.type === 'investment') {
+      familyMembers.forEach(m => {
+        const inp = document.getElementById(`${cat.id}-${m.toLowerCase()}`);
+        if (inp) inp.addEventListener('input', () => { updateInvestmentPieChart(); updateInvestmentBarChart(); });
+      });
+    }
+  });
+}
+
+/* ─────────────────────────────── SAVE / LOAD ─────────────────────────────── */
+let saveTimer = null;
+function scheduleSave() {
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(saveToBackend, 800);
+}
+
+async function saveToBackend() {
+  const values = {};
+  document.querySelectorAll('#investment-sections input').forEach(inp => {
+    if (inp.id && inp.value !== '') {
+      values[inp.id] = parseFloat(inp.value) || 0;
+    }
+  });
+  try {
+    await fetch('/api/save_all', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ categories, members: familyMembers, values })
+    });
+  } catch (e) {
+    console.error('Save failed:', e);
+  }
+}
+
+async function loadFromBackend() {
+  try {
+    const r = await fetch('/api/load_all');
+    const data = await r.json();
+    if (data.categories && data.categories.length) {
+      categories = data.categories;
+    }
+    if (data.members && data.members.length) {
+      familyMembers = data.members;
+    }
+    initializeApp();
+    if (data.values) {
+      Object.entries(data.values).forEach(([id, val]) => {
+        const el = document.getElementById(id);
+        if (el) el.value = val;
+      });
+      recalculateAllFutureValues();
+      updateSummaryTotals();
+      updateGrandTotal();
+      updateInvestmentPieChart();
+      updateInvestmentBarChart();
+    }
+  } catch (e) {
+    console.error('Load failed:', e);
+    initializeApp();
+  }
+}
+
+}); // DOMContentLoaded
+</script>
+</body>
+</html>
