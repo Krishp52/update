@@ -8,6 +8,7 @@ from math import pow
 import json
 import requests  # Add this import for backend API calls
 import yfinance as yf  # Add this import for Yahoo Finance API
+import os
 
 app = Flask(__name__)
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///finance.db'
@@ -248,4 +249,5 @@ def api_load_all():
     return jsonify(result)
 
 if __name__ == '__main__':
-    app.run(debug=True, port=3000)
+    port = int(os.environ.get("PORT", 3000))
+    app.run(host="0.0.0.0", port=port)
